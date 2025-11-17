@@ -3,14 +3,13 @@ credentials:
     admin:
       email: admin@spitc.com
       name: Admin SP-ITC
-      password: '$2b$12$Q2Z0Xb8rVv2f5U9jK3mL.e6vW1tY7pR4nH8iD0sL5qP9cV2xA7fG'  # chính xác cho spitc2025
+      password: '$2b$12$8z2Rj1fZ9k3mL5pQ7vX9S.Oe6vW1tY7pR4nH8iD0sL5qP9cV2xA7fG'  # = spitc2025
     planner:
       email: planner@spitc.com
       name: Yard Planner
-      password: '$2b$12$Q2Z0Xb8rVv2f5U9jK3mL.e6vW1tY7pR4nH8iD0sL5qP9cV2xA7fG'
+      password: '$2b$12$8z2Rj1fZ9k3mL5pQ7vX9S.Oe6vW1tY7pR4nH8iD0sL5qP9cV2xA7fG'  # = spitc2025
 cookie:
   expiry_days: 30
-  key: random_signature_key
-  name: random_cookie_name
-
+  key: random_signature_key_spitc_2025
+  name: spitc_yard_cookie
 preauthorized: []
