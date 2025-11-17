@@ -164,7 +164,7 @@ with tab5:
     # (giữ nguyên)
 
 with tab6:
-    st.header("Sơ đồ bãi theo tàu (Mặt cắt ngang - Top View & Profile View)")
+    st.header("Sơ đồ bãi theo tàu (Top View & Profile View)")
     if 'df_ton' in st.session_state:
         df = st.session_state.df_ton
         ships = sorted(df['Tên tàu'].unique())
@@ -179,15 +179,18 @@ with tab6:
                     with st.expander(f"Block {block}"):
                         num_bays = BLOCK_DIMENSIONS[block]['num_bays']
                         num_rows = BLOCK_DIMENSIONS[block]['num_rows']
-                        bays = [f"{i:02d}" for i in range(2, 2 + num_bays * 2, 2)]  # Assuming even bays for 20' slots
+                        num_tiers = BLOCK_DIMENSIONS[block]['num_tiers']
+                        bays = [f"{i:02d}" for i in range(1, num_bays + 1)]  # Adjust to start from 01, assuming sequential
                         rows = [f"{i:02d}" for i in range(1, num_rows + 1)]
+                        tiers = [f"{i:01d}" for i in range(num_tiers, 0, -1)]  # Reversed: 6 to 1
                         
-                        # For top view
-                        occ = pd.DataFrame(index=rows, columns=bays, data=0)
-                        text_df = pd.DataFrame(index=rows, columns=bays, data='')
+                        # For top view (heatmap row vs bay)
+                        occ_top = pd.DataFrame(index=rows, columns=bays, data=0)
+                        text_top = pd.DataFrame(index=rows, columns=bays, data='')
                         
-                        # For profile view (heights)
-                        stack_heights = {}
+                        # For profile view
+                        occ_profile = pd.DataFrame(index=tiers, columns=range(num_bays * num_rows), data=0)
+                        text_profile = pd.DataFrame(index=tiers, columns=range(num_bays * num_rows), data='')
                         
                         block_df = df_ship[df_ship['Block'] == block]
                         for _, cont in block_df.iterrows():
@@ -195,43 +198,52 @@ with tab6:
                                 parts = cont['Vị trí trên bãi'].split('-')
                                 bay = parts[1]
                                 row = parts[2]
-                                tier = int(parts[3])
+                                tier = parts[3]
                                 
-                                if row not in rows or bay not in bays:
+                                if row not in rows or bay not in bays or tier not in tiers:
                                     continue
                                 
                                 size = str(cont['Kích cỡ'])[0]
-                                occ.loc[row, bay] = 1  # Primary position: red
-                                text_df.loc[row, bay] = str(tier)
                                 
-                                key = (bay, row)
-                                stack_heights[key] = max(stack_heights.get(key, 0), tier)
+                                # Top view
+                                occ_top.loc[row, bay] = 1  # Occupied
+                                text_top.loc[row, bay] = tier
+                                
+                                # Profile view index
+                                bay_idx = bays.index(bay)
+                                row_idx = rows.index(row)
+                                col_idx = bay_idx * num_rows + row_idx
+                                occ_profile.loc[tier, col_idx] = 1
                                 
                                 if size == '4':  # 40'
-                                    next_bay_int = int(bay) + 2
-                                    next_bay = f"{next_bay_int:02d}"
-                                    if next_bay in bays and next_bay_int <= int(bays[-1]):
-                                        occ.loc[row, next_bay] = 2  # Extended: black with X
-                                        text_df.loc[row, next_bay] = 'X ' + str(tier)
-                                        key_next = (next_bay, row)
-                                        stack_heights[key_next] = max(stack_heights.get(key_next, 0), tier)
+                                    next_bay = f"{int(bay) + 1:02d}"  # Assuming bays are sequential 01,02,...
+                                    if next_bay in bays:
+                                        # Top view
+                                        occ_top.loc[row, next_bay] = 2
+                                        text_top.loc[row, next_bay] = 'X ' + tier
+                                        
+                                        # Profile view
+                                        next_bay_idx = bays.index(next_bay)
+                                        next_col_idx = next_bay_idx * num_rows + row_idx
+                                        occ_profile.loc[tier, next_col_idx] = 2
+                                        text_profile.loc[tier, next_col_idx] = 'X'
                             except:
-                                pass  # Bỏ qua nếu parse lỗi
+                                pass
                         
-                        # Vẽ top view heatmap
+                        # Vẽ top view
                         fig_top = go.Figure(go.Heatmap(
-                            z=occ.values,
-                            x=occ.columns,
-                            y=occ.index,
+                            z=occ_top.values,
+                            x=occ_top.columns,
+                            y=occ_top.index,
                             colorscale=[[0, 'white'], [0.5, 'red'], [1, 'black']],
                             showscale=False,
-                            text=text_df.values,
+                            text=text_top.values,
                             texttemplate="%{text}",
                             textfont={"color": "white", "size": 12}
                         ))
                         fig_top.update_layout(
-                            title=f"Sơ đồ Top View Block {block} cho tàu {select_ship} (Vị trí container chiếm đỏ, số là tier)",
-                            xaxis_title="Bay (chẵn, mỗi bay = 20' slot)",
+                            title=f"Top View Block {block} cho tàu {select_ship} (Chiếm đỏ, số là tier)",
+                            xaxis_title="Bay",
                             yaxis_title="Row",
                             height=400,
                             width=1000,
@@ -239,23 +251,57 @@ with tab6:
                         )
                         st.plotly_chart(fig_top)
                         
-                        # Vẽ profile view (chiều cao tier)
-                        st.subheader("Profile View (Chiều cao stack theo tier)")
-                        fig_profile = go.Figure()
-                        for row in rows:
-                            heights = [stack_heights.get((bay, row), 0) for bay in bays]
-                            fig_profile.add_trace(go.Bar(x=bays, y=heights, name=f'Row {row}'))
+                        # Vẽ profile view như hình
+                        st.subheader("Profile View (Mặt cắt ngang theo chiều cao)")
+                        fig_profile = go.Figure(go.Heatmap(
+                            z=occ_profile.values,
+                            x=occ_profile.columns,
+                            y=occ_profile.index,
+                            colorscale=[[0, 'white'], [0.5, 'blue'], [1, 'gray']],
+                            showscale=False,
+                            text=text_profile.values,
+                            texttemplate="%{text}",
+                            textfont={"color": "white", "size": 20}
+                        ))
+                        
+                        # Custom x ticks for bays at bottom, rows at top
+                        tickvals_bottom = [i * num_rows + (num_rows / 2 - 0.5) for i in range(num_bays)]
+                        ticktext_bottom = bays
+                        fig_profile.update_xaxes(
+                            tickvals=tickvals_bottom,
+                            ticktext=ticktext_bottom,
+                            tickmode='array',
+                            side='bottom',
+                            title="BAY"
+                        )
+                        
+                        # Annotations for row labels at top
+                        row_labels = []
+                        for bay_i in range(num_bays):
+                            for row_j, row_label in enumerate(rows):
+                                row_labels.append(dict(
+                                    x=bay_i * num_rows + row_j,
+                                    y=1.05,  # Above the plot
+                                    text=row_label,
+                                    showarrow=False,
+                                    xref='x',
+                                    yref='paper',
+                                    font=dict(size=10)
+                                ))
+                        fig_profile.update_layout(annotations=row_labels)
                         
                         fig_profile.update_layout(
-                            barmode='group',
-                            title=f"Chiều cao stack theo bay và row cho Block {block}",
-                            xaxis_title="Bay",
-                            yaxis_title="Max Tier",
+                            title=f"Profile View Block {block} cho tàu {select_ship}",
+                            yaxis_title="TIER",
+                            xaxis_title="",
                             height=500,
-                            width=1000,
-                            yaxis_range=[0, BLOCK_DIMENSIONS[block]['num_tiers'] + 1]
+                            width= max(1000, num_bays * num_rows * 10),  # Adjust width for large blocks
+                            yaxis_autorange='reversed',
+                            xaxis_showgrid=True,
+                            yaxis_showgrid=True,
+                            plot_bgcolor='white'
                         )
-                        st.plotly_chart(fig_profile)
+                        st.plotly_chart(fig_profile, use_container_width=True)
                 else:
                     st.warning(f"Không có dữ liệu kích thước cho block {block}")
         else:
