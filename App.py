@@ -20,7 +20,14 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days'],
 )
 
-name, authentication_status, username = authenticator.login('Login', 'sidebar')
+authenticator.login(location='sidebar')
+if st.session_state["authentication_status"]:
+    st.success(f'Chào {st.session_state["name"]} 👏')
+    authenticator.logout('Logout', 'sidebar')
+elif st.session_state["authentication_status"] is False:
+    st.error('Sai username/password')
+elif st.session_state["authentication_status"] is None:
+    st.warning('Nhập username + password')
 
 if st.session_state["authentication_status"] is False:
     st.error('Sai username/password')
@@ -132,3 +139,4 @@ with tab5:
 
 
 st.sidebar.success("App online 24/7 – Team SP-ITC")
+
