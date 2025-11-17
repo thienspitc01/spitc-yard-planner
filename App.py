@@ -74,6 +74,8 @@ BLOCK_DIMENSIONS = {
     # ... (thêm đầy đủ nếu có data chi tiết hơn)
 }
 
+RTG_BLOCKS = ['A1', 'B1', 'C1', 'D1', 'A2', 'B2', 'C2', 'D2', 'E1', 'F1', 'G1', 'H1', 'E2', 'F2', 'G2', 'H2', 'A0', 'H0', 'I0']
+
 def extract_block(pos):
     if pd.isna(pos): return "Unknown"
     try:
@@ -164,17 +166,15 @@ with tab5:
     # (giữ nguyên)
 
 with tab6:
-    st.header("Sơ đồ bãi theo tàu (Mặt cắt ngang toàn bãi)")
+    st.header("Sơ đồ bãi tất cả các bãi RTG (Mặt cắt ngang)")
     if 'df_ton' in st.session_state:
         df = st.session_state.df_ton
-        ships = sorted(df['Tên tàu'].unique())
-        select_ship = st.selectbox("Chọn tàu để xem vị trí container", ships)
-        df_ship = df[df['Tên tàu'] == select_ship]
+        ships = ['Không chọn tàu'] + sorted(df['Tên tàu'].unique())
+        select_ship = st.selectbox("Chọn tàu để highlight đỏ (nếu có)", ships)
+        highlight_ship = select_ship if select_ship != 'Không chọn tàu' else None
         
-        if not df_ship.empty:
-            ship_blocks = sorted(set(df_ship['Block']) & set(BLOCK_DIMENSIONS.keys()))
-            
-            for block in ship_blocks:
+        for block in RTG_BLOCKS:
+            if block in BLOCK_DIMENSIONS:
                 with st.expander(f"Block {block}"):
                     num_slots = BLOCK_DIMENSIONS[block]['num_bays']
                     num_rows = BLOCK_DIMENSIONS[block]['num_rows']
@@ -182,45 +182,49 @@ with tab6:
                     bays_data = [f"{i:02d}" for i in range(2, 2 + num_slots * 2, 2)]  # '02', '04', ..., 
                     bays_label = [f"{i:02d}" for i in range(1, 1 + num_slots * 2, 2)]  # '01', '03', ...
                     rows = [f"{i:02d}" for i in range(1, num_rows + 1)]
-                    tiers = [f"Tier {i}" for i in range(num_tiers, 0, -1)]
+                    tiers = [f"{i}" for i in range(num_tiers, 0, -1)]  # '6','5',...'1'
                     
                     occ_profile = pd.DataFrame(index=tiers, columns=range(num_slots * num_rows), data=0)
                     text_profile = pd.DataFrame(index=tiers, columns=range(num_slots * num_rows), data='')
                     
-                    block_df = df_ship[df_ship['Block'] == block]
-                    for _, cont in block_df.iterrows():
+                    df_block = df[df['Block'] == block]
+                    for _, cont in df_block.iterrows():
                         try:
                             parts = cont['Vị trí trên bãi'].split('-')
                             bay = parts[1]
                             row = parts[2]
                             tier = parts[3]
-                            tier_label = f"Tier {tier}"
                             
-                            if row not in rows or bay not in bays_data or tier_label not in tiers:
+                            if row not in rows or bay not in bays_data or tier not in tiers:
                                 continue
                             
-                            size = str(cont['Kích cỡ'])[0]
+                            is_ship = (cont['Tên tàu'] == highlight_ship) if highlight_ship else False
+                            z_primary = 3 if is_ship else 1
+                            z_extended = 4 if is_ship else 2
+                            
                             index = bays_data.index(bay)
                             row_idx = rows.index(row)
                             col_idx = index * num_rows + row_idx
-                            occ_profile.loc[tier_label, col_idx] = 1  # Primary blue
+                            occ_profile.loc[tier, col_idx] = z_primary
                             
-                            if size == '4':  # 40'
+                            size = str(cont['Kích cỡ'])[0]
+                            if size == '4':
                                 next_bay = f"{int(bay) + 2:02d}"
                                 if next_bay in bays_data:
                                     next_index = index + 1
                                     next_col_idx = next_index * num_rows + row_idx
-                                    occ_profile.loc[tier_label, next_col_idx] = 2  # Extended gray
-                                    text_profile.loc[tier_label, next_col_idx] = 'X'
+                                    occ_profile.loc[tier, next_col_idx] = z_extended
+                                    text_profile.loc[tier, next_col_idx] = 'X'
                         except:
                             pass
                     
                     # Vẽ profile view
+                    cell_size = 30  # Để ô vuông
                     fig_profile = go.Figure(go.Heatmap(
                         z=occ_profile.values,
                         x=occ_profile.columns,
                         y=occ_profile.index,
-                        colorscale=[[0, 'white'], [0.5, 'blue'], [1, 'gray']],
+                        colorscale=[[0, 'white'], [0.25, 'blue'], [0.5, 'gray'], [0.75, 'red'], [1.0, 'darkred']],
                         showscale=False,
                         text=text_profile.values,
                         texttemplate="%{text}",
@@ -234,7 +238,7 @@ with tab6:
                             row_labels.append(dict(
                                 x=slot_i * num_rows + row_j,
                                 y=1.05,
-                                text=f"Row {row_label}",
+                                text=row_label,
                                 showarrow=False,
                                 xref='x',
                                 yref='paper',
@@ -249,7 +253,8 @@ with tab6:
                         tickvals=tickvals_bottom,
                         ticktext=ticktext_bottom,
                         tickmode='array',
-                        side='bottom'
+                        side='bottom',
+                        title="BAY"
                     )
                     
                     # Shapes for red vertical lines between bays
@@ -259,8 +264,8 @@ with tab6:
                         shapes.append(dict(
                             type='line',
                             x0=x, x1=x,
-                            y0=0, y1=len(tiers),
-                            xref='x', yref='y',
+                            y0=0, y1=1,
+                            yref='paper',
                             line=dict(color='red', width=1)
                         ))
                     
@@ -268,39 +273,26 @@ with tab6:
                     annotations = row_labels + [
                         dict(x=-0.05, y=1.1, text="ROW", xref='paper', yref='paper', showarrow=False, font=dict(size=12)),
                         dict(x=-0.05, y=-0.1, text="BAY", xref='paper', yref='paper', showarrow=False, font=dict(size=12)),
-                        dict(x=-0.1, y=0.5, text=f"Block<br>{block}", xref='paper', yref='paper', showarrow=False, font=dict(size=12))
+                        dict(x=-0.1, y=0.5, text=f"{block}", xref='paper', yref='paper', showarrow=False, font=dict(size=12))
                     ]
                     
                     fig_profile.update_layout(
                         annotations=annotations,
                         shapes=shapes,
-                        title=f"Profile View Block {block} cho tàu {select_ship}",
+                        title=f"Profile View Block {block}",
                         yaxis_title="TIER",
-                        height=500,
-                        width=max(1000, num_slots * num_rows * 10),
+                        height=num_tiers * cell_size + 100,
+                        width=num_slots * num_rows * cell_size + 100,
                         yaxis_autorange='reversed',
                         xaxis_showgrid=True,
                         yaxis_showgrid=True,
+                        xaxis_gridcolor='lightgray',
+                        yaxis_gridcolor='lightgray',
+                        xaxis_gridwidth=1,
+                        yaxis_gridwidth=1,
                         plot_bgcolor='white'
                     )
-
-                    # Làm lưới sắc nét hơn
-                    fig_profile.update_xaxes(
-                        showgrid=True,
-                        gridwidth=2,
-                        gridcolor='black',
-                        zeroline=False
-                    )
-                    fig_profile.update_yaxes(
-                        showgrid=True,
-                        gridwidth=2,
-                        gridcolor='black',
-                        zeroline=False
-                    )
-
                     st.plotly_chart(fig_profile, use_container_width=True)
-        else:
-            st.info("Tàu này chưa có container trên bãi")
     else:
         st.info("Vui lòng upload file tồn xuất ở tab 1")
 
