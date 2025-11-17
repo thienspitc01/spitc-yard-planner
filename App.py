@@ -182,7 +182,7 @@ with tab6:
                     bays_data = [f"{i:02d}" for i in range(2, 2 + num_slots * 2, 2)]  # '02', '04', ..., 
                     bays_label = [f"{i:02d}" for i in range(1, 1 + num_slots * 2, 2)]  # '01', '03', ...
                     rows = [f"{i:02d}" for i in range(1, num_rows + 1)]
-                    tiers = [f"{i}" for i in range(num_tiers, 0, -1)]
+                    tiers = [f"Tier {i}" for i in range(num_tiers, 0, -1)]
                     
                     occ_profile = pd.DataFrame(index=tiers, columns=range(num_slots * num_rows), data=0)
                     text_profile = pd.DataFrame(index=tiers, columns=range(num_slots * num_rows), data='')
@@ -194,23 +194,24 @@ with tab6:
                             bay = parts[1]
                             row = parts[2]
                             tier = parts[3]
+                            tier_label = f"Tier {tier}"
                             
-                            if row not in rows or bay not in bays_data or tier not in tiers:
+                            if row not in rows or bay not in bays_data or tier_label not in tiers:
                                 continue
                             
                             size = str(cont['Kích cỡ'])[0]
                             index = bays_data.index(bay)
                             row_idx = rows.index(row)
                             col_idx = index * num_rows + row_idx
-                            occ_profile.loc[tier, col_idx] = 1  # Primary blue
+                            occ_profile.loc[tier_label, col_idx] = 1  # Primary blue
                             
                             if size == '4':  # 40'
                                 next_bay = f"{int(bay) + 2:02d}"
                                 if next_bay in bays_data:
                                     next_index = index + 1
                                     next_col_idx = next_index * num_rows + row_idx
-                                    occ_profile.loc[tier, next_col_idx] = 2  # Extended gray
-                                    text_profile.loc[tier, next_col_idx] = 'X'
+                                    occ_profile.loc[tier_label, next_col_idx] = 2  # Extended gray
+                                    text_profile.loc[tier_label, next_col_idx] = 'X'
                         except:
                             pass
                     
@@ -233,7 +234,7 @@ with tab6:
                             row_labels.append(dict(
                                 x=slot_i * num_rows + row_j,
                                 y=1.05,
-                                text=row_label,
+                                text=f"Row {row_label}",
                                 showarrow=False,
                                 xref='x',
                                 yref='paper',
@@ -282,6 +283,21 @@ with tab6:
                         yaxis_showgrid=True,
                         plot_bgcolor='white'
                     )
+
+                    # Làm lưới sắc nét hơn
+                    fig_profile.update_xaxes(
+                        showgrid=True,
+                        gridwidth=2,
+                        gridcolor='black',
+                        zeroline=False
+                    )
+                    fig_profile.update_yaxes(
+                        showgrid=True,
+                        gridwidth=2,
+                        gridcolor='black',
+                        zeroline=False
+                    )
+
                     st.plotly_chart(fig_profile, use_container_width=True)
         else:
             st.info("Tàu này chưa có container trên bãi")
