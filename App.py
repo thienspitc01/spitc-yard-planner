@@ -20,7 +20,7 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days'],
 )
 
-name, authentication_status, username = authenticator.login('Login để vào hệ thống SP-ITC Yard Planner', 'main')
+name, authentication_status, username = authenticator.login('Login', 'sidebar')
 
 if st.session_state["authentication_status"] is False:
     st.error('Sai username/password')
@@ -129,5 +129,6 @@ with tab5:
     if 'notes' in st.session_state:
         for n in reversed(st.session_state.notes[-20:]):
             st.write(n)
+
 
 st.sidebar.success("App online 24/7 – Team SP-ITC")
